@@ -1,0 +1,5 @@
+fastapi==0.115.8
+uvicorn==0.18.2
+speechrecognition==3.14.1
+openai==0.28.0
+python-dotenv==1.0.1
