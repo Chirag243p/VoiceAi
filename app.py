@@ -1,23 +1,44 @@
-from flask import Flask, request, jsonify
+from fastapi import FastAPI, HTTPException
 import speech_recognition as sr
+import openai
+import os
+from dotenv import load_dotenv
 
-app = Flask(__name__)
+# Load environment variables from .env file
+load_dotenv()
 
-@app.route("/speech-to-text", methods=["POST"])
-def speech_to_text():
+# Set your OpenAI API key here
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+app = FastAPI()
+
+@app.post("/speech-to-text")
+async def speech_to_text():
     recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        print("Listening...")
-        recognizer.adjust_for_ambient_noise(source)
-        audio = recognizer.listen(source)
 
     try:
-        text = recognizer.recognize_google(audio)
-        return jsonify({"text": text})
-    except sr.UnknownValueError:
-        return jsonify({"error": "Could not understand the audio."})
-    except sr.RequestError:
-        return jsonify({"error": "Speech recognition service error."})
+        with sr.Microphone() as source:
+            print("Listening...")
+            recognizer.adjust_for_ambient_noise(source)
+            audio = recognizer.listen(source)
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+        text = recognizer.recognize_google(audio)
+        print(f"You said: {text}")
+
+        response = openai.ChatCompletion.create(
+            model="gpt-4-turbo",
+            messages=[{"role": "user", "content": text}]
+        )
+
+        chatgpt_answer = response['choices'][0]['message']['content'].strip()
+
+        return {"text": text, "chatgpt_response": chatgpt_answer}
+
+    except sr.UnknownValueError:
+        raise HTTPException(status_code=400, detail="Could not understand the audio.")
+    except sr.RequestError:
+        raise HTTPException(status_code=500, detail="Speech recognition service error.")
+    except openai.error.OpenAIError as e:
+        raise HTTPException(status_code=500, detail=f"OpenAI API error: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
